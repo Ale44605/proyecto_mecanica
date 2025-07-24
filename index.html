@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Banda Transportadora - Proyecto</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      .img-container {
+        width: 100%;
+        max-width: 220px;
+        aspect-ratio: 1 / 1;
+        overflow: hidden;
+      }
+      .navbar-brand {
+      font-family: 'Angsana New';
+        font-size: 8rem;
+        letter-spacing: 3px;
+      }
+
+      .img-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border: 2px solid #dee2e6;
+      }
+
+      .chat-container {
+        width: 400px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+      .chat-box {
+        height: 300px;
+        overflow-y: auto;
+        padding: 10px;
+        border-bottom: 1px solid #ddd;
+      }
+      .chat-box p {
+        margin: 5px 0;
+        padding: 8px 12px;
+        border-radius: 15px;
+      }
+      .user {
+        background: #007bff;
+        color: #fff;
+        text-align: right;
+      }
+      .bot {
+        background: #f1f1f1;
+        color: #333;
+        text-align: left;
+      }
+      .input-container {
+        display: flex;
+        padding: 10px;
+      }
+      .input-container input {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      .input-container button {
+        padding: 10px 15px;
+        margin-left: 5px;
+        background: #007bff;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .input-container button:hover {
+        background: #0056b3;
+      }
+      #suggestions {
+  padding: 10px;
+  border-top: 1px solid #ddd;
+  background-color: #f0f8ff;
+  overflow-x: auto;
+}
+
+#suggestion-buttons {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+#suggestion-buttons button {
+  white-space: nowrap;
+  padding: 10px 14px;
+  border: none;
+  background: linear-gradient(145deg, #007bff, #339cff);
+  color: #fff;
+  font-weight: bold;
+  font-size: 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  box-shadow: 2px 2px 5px rgba(0, 123, 255, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#suggestion-buttons button:hover {
+  transform: scale(1.05);
+  box-shadow: 3px 3px 8px rgba(0, 123, 255, 0.4);
+  background: linear-gradient(145deg, #0062cc, #3383ff);
+}
+
+
+    </style>
+  </head>
+  <body>
+    <!-- Botón flotante -->
+<div id="chat-toggle" title="Abrir chat">💬</div>
+
+<!-- Chat flotante -->
+<div id="chat-widget" class="chat-hidden">
+  <div class="chat-container">
+    <div class="chat-box" id="chatBox"></div>
+
+    <div id="suggestions">
+      <strong>Preguntas sugeridas:</strong>
+      <div id="suggestion-buttons">
+        <button onclick="setSuggested('hola')">hola</button>
+        <button onclick="setSuggested('¿cómo estás?')">¿cómo estás?</button>
+        <button onclick="setSuggested('¿qué puedes hacer?')">¿qué puedes hacer?</button>
+        <button onclick="setSuggested('adiós')">adiós</button>
+      </div>
+    </div>
+
+    <div class="input-container">
+      <input type="text" id="userInput" placeholder="Escribe tu mensaje aquí...">
+      <button id="sendBtn">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.onload = function () {
+    const chatToggle = document.getElementById("chat-toggle");
+    const chatWidget = document.getElementById("chat-widget");
+    const chatBox = document.getElementById("chatBox");
+    const userInput = document.getElementById("userInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    let isLearning = false;
+    let pendingQuestion = '';
+
+    let responses = JSON.parse(localStorage.getItem('chatbotResponses')) || {
+      "hola": "¡Hola! ¿En qué puedo ayudarte?",
+      "¿cómo estás?": "Soy un chatbot, ¡pero estoy aquí para ayudarte!",
+      "adiós": "¡Hasta luego! Que tengas un buen día.",
+      "¿qué puedes hacer?": "Puedo aprender de ti y responder preguntas básicas."
+    };
+
+    chatToggle.onclick = function () {
+      if (chatWidget.classList.contains("chat-hidden")) {
+        chatWidget.classList.remove("chat-hidden");
+        chatWidget.classList.add("chat-visible");
+        chatToggle.title = "Cerrar chat";
+      } else {
+        chatWidget.classList.remove("chat-visible");
+        chatWidget.classList.add("chat-hidden");
+        chatToggle.title = "Abrir chat";
+      }
+    };
+
+    sendBtn.onclick = sendMessage;
+
+    function sendMessage() {
+      const input = userInput.value.trim();
+      if (input === '') return;
+
+      addMessage(input, 'user');
+      userInput.value = '';
+
+      if (isLearning) {
+        responses[pendingQuestion] = input;
+        localStorage.setItem('chatbotResponses', JSON.stringify(responses));
+        addMessage("¡Gracias! He aprendido algo nuevo. 😊", 'bot');
+        isLearning = false;
+        pendingQuestion = '';
+        return;
+      }
+
+      const message = input.toLowerCase();
+      const response = responses[message];
+
+      if (response) {
+        setTimeout(() => addMessage(response, 'bot'), 500);
+      } else {
+        setTimeout(() => {
+          addMessage("No sé cómo responder eso. ¿Qué debería decir?", 'bot');
+          isLearning = true;
+          pendingQuestion = message;
+        }, 500);
+      }
+    }
+
+    function addMessage(text, sender) {
+      const msg = document.createElement('p');
+      msg.className = sender;
+      msg.textContent = text;
+      chatBox.appendChild(msg);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    window.setSuggested = function (text) {
+      userInput.value = text;
+      userInput.focus();
+    };
+  };
+</script>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+      <div class="container">
+        <a class="navbar-brand" href="#">Banda Transportadora</a>
+      </div>
+    </nav>
+
+    <div class="container">
+
+      <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Equipo del Proyecto</h5>
+        </div>
+        <div class="card-body">
+        <p>Javier Villanueva Alejo<br>
+           Diego Alejandro Esparza Alonso<br>
+           Diego Jaziel Saucedo Martínez</p>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0">Objetivo del Proyecto</h5>
+        </div>
+        <div class="card-body">
+        <p>Diseñar e implementar una banda transportadora funcional a pequeña escala, simulando procesos industriales con materiales accesibles, aplicando principios de mecánica, energía y automatización básica.</p>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+          <h5 class="mb-0">Materiales y Costos</h5>
+        </div>
+        <div class="card-body">
+          <ul>
+            <li>Motor: $50</li>
+            <li>Banda: $30</li>
+            <li>Pilas 12v: $120</li>
+            <li>Cableado: $20</li>
+            <li>Ligas: $20</li>
+            <li>Bujes: $30</li>
+            <li>Palos de paleta: $30</li>
+            <li>Engranes: $65</li>
+            <li>Bolsas de tornillos: $60</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+          <h5 class="mb-0">Funcionamiento</h5>
+        </div>
+        <div class="card-body">
+        <p>El motor genera un movimiento rotatorio que, mediante engranes y ligas, impulsa la banda para mover objetos de un extremo al otro.</p>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+          <h5 class="mb-0">Implementación</h5>
+        </div>
+        <div class="card-body">
+        <p>Útil en construcciones para elevar materiales a techos o superficies altas, reduciendo el esfuerzo físico y aumentando la eficiencia.</p>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+          <h5 class="mb-0">Fórmulas Usadas y Ejemplos</h5>
+        </div>
+        <div class="card-body">
+          <ul>
+            <li><strong>Fuerza:</strong> F = m × g → Ej: 0.6 × 9.8 = 5.88 N</li>
+          <li><strong>Trabajo:</strong> W = F × d × cos(θ) → Ej: 5 × 2 × cos(30°) ≈ 8.66 J</li>
+            <li><strong>Potencia:</strong> P = W / t → Ej: 8.66 / 3 = 2.88 W</li>
+            <li><strong>Fricción:</strong> f = μ × N → Ej: 0.25 × 7.84 = 1.96 N</li>
+          </ul>
+        </div>
+
+
+      <div class="card mb-4">
+        <div class="card-header bg-danger text-white">
+          <h5 class="mb-0">Conclusión</h5>
+        </div>
+        <div class="card-body">
+        <p>Este proyecto permitió comprender la relación entre sistemas eléctricos y mecánicos para resolver problemas prácticos, demostrando que con recursos básicos se puede crear una solución eficiente y económica.</p>
+        </div>
+      </div>
+
+      <div class="card mb-5">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Galería: Banda Transportadora</h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col d-flex justify-content-cente">
+              <img src="12.jpeg" class="img-fluid rounded" alt="Banda 1">
+            </div>
+
+            <div class="col d-flex justify-content-cente">
+              <img src="3.jpeg" class="img-fluid rounded" alt="Banda 4">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      
+  
+    </div>
+    <div class="container my-5">
+        <div class="card">
+          <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">Video Explicacion</h5>
+          </div>
+          <div class="card-body">
+            <div class="ratio ratio-16x9">
+                <iframe width="560" height="315" src="https://www.youtube.com/embed/16E3EPB0a58?si=NQLZ0xNQ635GHPpk" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+  
+    <footer class="bg-dark text-center text-white py-3">
+      &copy; 2025 Proyecto - Banda Transportadora
+    </footer>
+    
+
+  
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chatbot Inteligente</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f9;
+    }
+
+    #chat-toggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      font-size: 30px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .chat-visible {
+      display: block;
+    }
+
+    .chat-hidden {
+      display: none;
+    }
+
+    .chat-container {
+      position: fixed;
+      bottom: 90px;
+      right: 20px;
+      width: 400px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+      z-index: 999;
+    }
+
+    .chat-box {
+      height: 250px;
+      overflow-y: auto;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .chat-box p {
+      margin: 5px 0;
+      padding: 8px 12px;
+      border-radius: 15px;
+      max-width: 80%;
+      word-wrap: break-word;
+    }
+
+    .user {
+      background: #007bff;
+      color: #fff;
+      text-align: right;
+      margin-left: auto;
+    }
+
+    .bot {
+      background: #f1f1f1;
+      color: #333;
+      text-align: left;
+      margin-right: auto;
+    }
+
+    .input-container {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #ddd;
+    }
+
+    .input-container input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .input-container button {
+      padding: 10px 15px;
+      margin-left: 5px;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .input-container button:hover {
+      background: #0056b3;
+    }
+
+    #suggestions {
+      padding: 8px 10px;
+      background: #f9f9f9;
+      border-top: 1px solid #ddd;
+    }
+
+    #suggestion-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 5px;
+    }
+
+    #suggestion-buttons button {
+      padding: 5px 10px;
+      background: #e0e0e0;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s;
+    }
+
+    #suggestion-buttons button:hover {
+      background: #d0d0d0;
+    }
+  </style>
+</head>
+
